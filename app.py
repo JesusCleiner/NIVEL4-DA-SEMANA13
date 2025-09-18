@@ -1,6 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, flash
 from conexion.conexion import get_connection
-import bcrypt
 
 app = Flask(__name__)
 app.secret_key = "clave_secreta_flask"  # Necesaria para mensajes flash
@@ -27,33 +26,53 @@ def contacto():
     return render_template("contacto.html")
 
 # -----------------------------
-# Ruta de Login
+# Ruta para Crear Usuario
 # -----------------------------
-@app.route("/login", methods=["GET", "POST"])
-def login():
+@app.route("/crear_usuario", methods=["GET", "POST"])
+def crear_usuario():
+    nombre = ""
+    email = ""
     if request.method == "POST":
+        nombre = request.form["nombre"]
         email = request.form["email"]
-        password = request.form["password"]
 
-        # Conectar a la base de datos
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            # Insertamos un valor fijo para password
+            cursor.execute(
+                "INSERT INTO usuarios (nombre, email, password) VALUES (%s, %s, %s)",
+                (nombre, email, "sin_password")
+            )
+            conn.commit()
+            cursor.close()
+            conn.close()
+            flash("Usuario creado correctamente", "success")
+            # Limpiar variables para que el formulario quede vacío
+            nombre = ""
+            email = ""
+        except Exception as e:
+            flash(f"Error al crear usuario: {str(e)}", "danger")
+
+    return render_template("crear_usuario.html", nombre=nombre, email=email)
+
+
+# -----------------------------
+# Ruta para Consultar Usuarios
+# -----------------------------
+@app.route("/consultar_usuarios")
+def consultar_usuarios():
+    try:
         conn = get_connection()
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM usuarios WHERE email = %s", (email,))
-        usuario = cursor.fetchone()
+        cursor.execute("SELECT id_usuario, nombre, email FROM usuarios")
+        usuarios = cursor.fetchall()
         cursor.close()
         conn.close()
-
-        if usuario:
-            # Verificar contraseña hasheada
-            if bcrypt.checkpw(password.encode('utf-8'), usuario["password"].encode('utf-8')):
-                flash(f"Bienvenido {usuario['nombre']}!", "success")
-                return redirect(url_for("inicio"))
-            else:
-                flash("Contraseña incorrecta", "danger")
-        else:
-            flash("Usuario no encontrado", "danger")
-
-    return render_template("login.html")
+        return render_template("consultar_usuarios.html", usuarios=usuarios)
+    except Exception as e:
+        flash(f"Error al consultar usuarios: {str(e)}", "danger")
+        return redirect(url_for("inicio"))
 
 # -----------------------------
 # Ruta para probar la conexión con la base de datos
